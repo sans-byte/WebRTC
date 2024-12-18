@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 function Sender() {
   const [socket, setSocket] = useState<null | WebSocket>(null);
+  const senderVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     const socket = new WebSocket("ws://localhost:8080");
@@ -29,20 +30,26 @@ function Sender() {
       );
     };
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    socket.onmessage = async (event) => {
+      const data = await JSON.parse(event.data);
       if (data.type === "answer") {
-        pc.setRemoteDescription(data.sdp);
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
       } else if (data.type === "iceCandidate") {
-        pc.addIceCandidate(data.candidate);
+        await pc.addIceCandidate(data.candidate);
       }
     };
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true,
-      audio: false,
+      audio: true,
     });
-    pc.addTrack(stream.getVideoTracks()[0]);
+    if (senderVideoRef.current) {
+      senderVideoRef.current.srcObject = stream;
+    }
+    stream.getTracks().forEach((track) => {
+      console.log("Adding track:", track);
+      pc.addTrack(track, stream);
+    });
   }
 
   return (
@@ -59,6 +66,7 @@ function Sender() {
       >
         <div> Send Video </div>
         <button onClick={sendVideo}> Sender </button>
+        <video ref={senderVideoRef} autoPlay></video>
       </div>
     </>
   );
